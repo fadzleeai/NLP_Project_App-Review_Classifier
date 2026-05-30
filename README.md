@@ -1,4 +1,7 @@
 # NLP_Project_App-Review_Classifier
+
+Theme: 6; App Review Classifier
+
 Team Members
 
 |  Name  |  Matrics Number  |
