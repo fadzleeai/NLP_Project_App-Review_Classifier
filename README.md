@@ -10,4 +10,4 @@ Team Members
 |-----|-----|
 |Muhammad Farkhin bin Abd Baser|A24AI0055|
 |Muhammad Haziem Azfar bin Mohd Ransaimon|A24AI0057|
-|Muhammad Afiq Ikmal bin Mohd Roslan|A24AI0046|
+|Mohamad Afiq Ikmal Bin Mohd Roslan|A24AI0046|
