@@ -2,6 +2,8 @@
 
 Theme: 6; App Review Classifier
 
+Title: Thread App Review Sentiment Analysis
+
 Team Members
 
 |  Name  |  Matrics Number  |
