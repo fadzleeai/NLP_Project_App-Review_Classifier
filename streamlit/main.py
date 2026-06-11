@@ -1,4 +1,8 @@
 import streamlit as st
+import joblib
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pandas as pd
+
 
 st.set_page_config(
     page_title="App Review Classifier",
@@ -93,7 +97,91 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 with tab1:
-    pass  # your prediction code here
+    st.subheader("🧠 Model Status")
+    #Load Model
+    status_box_lr = st.empty()
+    try:
+        status_box_lr.info("Loading Logistic Regression model...")
+
+        model_lr = joblib.load("models/logistic_regression.pkl")
+
+        status_box_lr.success("Loaded Logistic Regression model successfully ✅")
+
+    except Exception as e:
+        status_box_lr.error(f"Failed to load Logistic Regressuin model: {e}")
+
+    status_box_nb = st.empty()
+    try:
+        status_box_nb.info("Loading Naive Bayes Model...")
+
+        model_nb = joblib.load("models/naive_bayes.pkl")
+
+        status_box_nb.success("Loaded Naive Bayes model successfully ✅")
+
+    except Exception as e:
+        status_box_nb.error(f"Failed to load Naive Bayes model: {e}")
+
+    status_box_le = st.empty()
+    try:
+        status_box_le.info("Loading Label Encoder...")
+
+        le = joblib.load("models/label_encoder.pkl")
+
+        status_box_le.success("Loaded label encoder successfully ✅")
+
+    except Exception as e:
+        status_box_nb.error(f"Failed to label encoder: {e}")
+
+        
+    #Body
+    model_choice = st.selectbox(
+        "Choose model",
+        ["Logistic Regression", "Naive Bayes"]
+    )
+    
+    models = {
+        "Logistic Regression": model_lr,
+        "Naive Bayes": model_nb
+    }
+
+    model = models[model_choice]
+    
+    text = st.text_input("Enter review")
+
+    if st.button("Predict"):
+        conf = model.predict_proba([text])[0]
+        sentiment = le.inverse_transform(model.predict([text]))[0]
+        st.write(f"Sentiment: {sentiment}")
+        
+        confidence_neg = conf[0]
+        confidence_neu = conf[1]
+        confidence_pos = conf[2]
+
+        st.write("### Negative")
+
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            st.progress(confidence_neg)
+
+        with col2:
+            st.write(f"{confidence_neg*100:.1f}%")
+
+        st.write("### Neutral")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.progress(confidence_neu)
+        with col2:
+            st.write(f"{confidence_neu*100:.1f}%")
+
+        st.write("### Positive")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.progress(confidence_pos)
+        with col2:
+            st.write(f"{confidence_pos*100:.1f}%")
+
+    
 
 with tab2:
     pass  # your visualization code here
