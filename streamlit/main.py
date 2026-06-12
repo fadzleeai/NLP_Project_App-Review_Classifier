@@ -1,6 +1,8 @@
 import streamlit as st
 import joblib
-from sklearn.feature_extraction.text import TfidfVectorizer
+from pathlib import Path
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 import pandas as pd
 
 
@@ -88,6 +90,20 @@ st.markdown("""
 </p>
 """, unsafe_allow_html=True)
 
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = BASE_DIR.parent
+MODEL_DIR = BASE_DIR / "models"
+DATA_PATH = PROJECT_DIR / "data" / "37000_reviews_with_sentiment.csv"
+
+@st.cache_data
+def load_data():
+    df = pd.read_csv(DATA_PATH)
+    df["review_description"] = df["review_description"].fillna("").astype(str)
+    df["sentiment"] = df["sentiment"].fillna("").astype(str)
+    return df
+
+df = load_data()
+
 # ── Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "🔮  Predict",
@@ -103,7 +119,7 @@ with tab1:
     try:
         status_box_lr.info("Loading Logistic Regression model...")
 
-        model_lr = joblib.load("models/logistic_regression.pkl")
+        model_lr = joblib.load(MODEL_DIR / "logistic_regression.pkl")
 
         status_box_lr.success("Loaded Logistic Regression model successfully ✅")
 
@@ -114,7 +130,7 @@ with tab1:
     try:
         status_box_nb.info("Loading Naive Bayes Model...")
 
-        model_nb = joblib.load("models/naive_bayes.pkl")
+        model_nb = joblib.load(MODEL_DIR / "naive_bayes.pkl")
 
         status_box_nb.success("Loaded Naive Bayes model successfully ✅")
 
@@ -125,7 +141,7 @@ with tab1:
     try:
         status_box_le.info("Loading Label Encoder...")
 
-        le = joblib.load("models/label_encoder.pkl")
+        le = joblib.load(MODEL_DIR / "label_encoder.pkl")
 
         status_box_le.success("Loaded label encoder successfully ✅")
 
@@ -184,10 +200,160 @@ with tab1:
     
 
 with tab2:
-    pass  # your visualization code here
+    st.subheader("Dataset Visualizations")
+
+    st.write("### 1. Sentiment Distribution")
+    sentiment_counts = df["sentiment"].value_counts()
+    st.bar_chart(sentiment_counts)
+
+    st.write("### 2. Rating Distribution")
+    rating_counts = df["rating"].value_counts().sort_index()
+    st.bar_chart(rating_counts)
+
+    st.write("### 3. Review Source Distribution")
+    source_counts = df["source"].value_counts()
+    st.bar_chart(source_counts)
+
+    st.write("### 4. Sentiment Trend Over Time")
+
+    df_trend = df.copy()
+    df_trend["review_date"] = pd.to_datetime(df_trend["review_date"], errors="coerce")
+    df_trend = df_trend.dropna(subset=["review_date"])
+
+    if len(df_trend) > 0:
+        monthly_sentiment = (
+            df_trend
+            .groupby([pd.Grouper(key="review_date", freq="ME"), "sentiment"])
+            .size()
+            .unstack(fill_value=0)
+        )
+
+        monthly_sentiment.index = monthly_sentiment.index.strftime("%Y-%m")
+        st.line_chart(monthly_sentiment)
+    else:
+        st.warning("No valid review dates found for trend visualization.")
+
+    st.write("### 5. Top 20 Common Words in Reviews")
+
+    try:
+        vectorizer = CountVectorizer(stop_words="english", max_features=20)
+        word_matrix = vectorizer.fit_transform(df["review_description"])
+
+        word_counts = word_matrix.sum(axis=0).A1
+        words = vectorizer.get_feature_names_out()
+
+        top_words_df = pd.DataFrame({
+            "word": words,
+            "count": word_counts
+        }).sort_values(by="count", ascending=False)
+
+        st.bar_chart(top_words_df.set_index("word"))
+    except Exception as e:
+        st.error(f"Failed to generate top words chart: {e}")
+
 
 with tab3:
-    pass  # your model comparison code here
+    st.subheader("Model Comparison")
+
+    st.write("""
+    This section compares two machine learning models trained for app review sentiment classification:
+    Logistic Regression and Naive Bayes.
+    """)
+
+    X_all = df["review_description"]
+    y_all = le.transform(df["sentiment"])
+
+    def evaluate_model(model, model_name):
+        y_pred = model.predict(X_all)
+
+        return {
+            "Model": model_name,
+            "Accuracy": accuracy_score(y_all, y_pred),
+            "Precision": precision_score(y_all, y_pred, average="weighted", zero_division=0),
+            "Recall": recall_score(y_all, y_pred, average="weighted", zero_division=0),
+            "F1-score": f1_score(y_all, y_pred, average="weighted", zero_division=0)
+        }
+
+    try:
+        results = [
+            evaluate_model(model_lr, "Logistic Regression"),
+            evaluate_model(model_nb, "Naive Bayes")
+        ]
+
+        results_df = pd.DataFrame(results)
+
+        st.write("### Evaluation Metrics")
+        st.dataframe(results_df)
+
+        st.write("### Model Accuracy Comparison")
+        st.bar_chart(results_df.set_index("Model")[["Accuracy"]])
+
+        st.write("### Model F1-score Comparison")
+        st.bar_chart(results_df.set_index("Model")[["F1-score"]])
+
+        st.write("### Confusion Matrix")
+
+        cm_model_choice = st.selectbox(
+            "Choose model for confusion matrix",
+            ["Logistic Regression", "Naive Bayes"],
+            key="cm_model_choice"
+        )
+
+        selected_model = model_lr if cm_model_choice == "Logistic Regression" else model_nb
+        y_pred_selected = selected_model.predict(X_all)
+
+        cm = confusion_matrix(y_all, y_pred_selected)
+        cm_df = pd.DataFrame(
+            cm,
+            index=le.classes_,
+            columns=le.classes_
+        )
+
+        st.dataframe(cm_df)
+
+    except Exception as e:
+        st.error(f"Failed to compare models: {e}")
+
 
 with tab4:
-    pass  # your about section here
+    st.subheader("About This Project")
+
+    st.write("""
+    This project is a Natural Language Processing application for app review sentiment analysis.
+    The system classifies user reviews into three sentiment categories:
+    negative, neutral, and positive.
+    """)
+
+    st.write("### Project Theme")
+    st.write("Theme 6: App Review Classifier")
+
+    st.write("### Dataset")
+    st.write("""
+    The dataset contains mobile app reviews with review text, rating, review date, source, and sentiment labels.
+    It is used to train and evaluate sentiment classification models.
+    """)
+
+    st.write("### NLP Pipeline")
+    st.write("""
+    1. Load app review dataset  
+    2. Clean and prepare review text  
+    3. Convert text into numerical features using TF-IDF  
+    4. Train machine learning models  
+    5. Compare model performance  
+    6. Use the selected model for sentiment prediction  
+    """)
+
+    st.write("### Models Used")
+    st.write("""
+    - Logistic Regression  
+    - Naive Bayes  
+    """)
+
+    st.write("### Checkpoint 2 Features")
+    st.write("""
+    - Text input and sentiment prediction  
+    - Confidence score display  
+    - Dataset visualizations  
+    - Two-model comparison  
+    - Basic Streamlit prototype ready for lab demo  
+    """)
